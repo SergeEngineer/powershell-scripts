@@ -1,0 +1,1 @@
+﻿Get-MsmqQueue | Select QueueName | Export-Csv -Path C:\queues.csv

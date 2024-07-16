@@ -1,0 +1,1 @@
+﻿Test-NetConnection -ComputerName "PrdApp1" -Port 3389
