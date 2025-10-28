@@ -1,26 +1,57 @@
-#NAME: service_Check.ps1 
-#AUTHOR: Serge Voloshenko
-#DATE: 3/17/2022
+# ====== Email Settings ======
+$sendEmail = $true
+$sendTo = "me@domain.com"
+$sendFrom = "noreply@domain.com"
+$smtpServer = "smtp.domain.com"
+$subject = "INFO: $(hostname) - Service was stopped"
 
-# Create an array of all services running
-$GetService = get-service
+# Initialize array
+$restartedServices = @()
 
 
-# Iterate throw each service on a host
-foreach ($Service in $GetService)
-{
-    # Get all services starting with "MHS"
-    if ($Service.DisplayName.StartsWith("MHS"))
-    {
-        # Show status of each service
-        Write-Host ($Service.DisplayName, $Service.Status, $Service.StartType) -Separator "`t`t`t`t`t|`t"
-        
-        # Check if a service is service is RUNNING.  
-        # Restart all "Automatic" services that currently stopped
-		if ($Service.StartType -eq 'Automatic' -and $Service.status -eq 'Stopped' )
-        {
-            Restart-Service -Name $Service.DisplayName
-            Write-Host $Service.DisplayName "|`thas been restarted!"   
-		}
+# ============================== #
+# ======== Main Logic ========== #
+# ============================== #
+
+# Get all services that start with "MYNAME"
+$GetService = Get-Service | Where-Object { $_.DisplayName -like "MYNAME*" }
+
+foreach ($Service in $GetService) {
+    Write-Host ("{0,-30} | {1,-10} | {2}" -f $Service.DisplayName, $Service.Status, $Service.StartType)
+
+    # Restart any Automatic service that is Stopped
+    if ($Service.StartType -eq 'Automatic' -and $Service.Status -eq 'Stopped') {
+        try {
+            Start-Service -Name $Service.Name -ErrorAction Stop
+            Write-Host "$($Service.DisplayName) has been restarted." -ForegroundColor Yellow
+            # make a note of the restarted service
+            $restartedServices += $Service.DisplayName
+        }
+        catch {
+            Write-Warning "Failed to restart $($Service.DisplayName): $_"
+        }
     }
 }
+
+# ============================== #
+# ======== Send Email ========== #
+# ============================== #
+
+if ($sendEmail -and $restartedServices.Count -gt 0) {
+    $body  = "The following services were found stopped and have been restarted on $(hostname):`n`n"
+    foreach ($serviceName in $restartedServices) {
+        $body += " - $serviceName`n"
+    }
+
+    Send-MailMessage -To $sendTo `
+                     -From $sendFrom `
+                     -Subject $subject `
+                     -Body $body `
+                     -SmtpServer $smtpServer
+
+    Write-Host "Email notification sent to $sendTo" -ForegroundColor Green
+}
+else {
+    Write-Host "No stopped MHS services found, or no email configured." -ForegroundColor Cyan
+}
+
